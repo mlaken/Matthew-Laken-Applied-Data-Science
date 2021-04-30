@@ -1,0 +1,171 @@
+---
+title: "UFC Stats, Charts & Graphs"
+author: "Matthew Laken"
+date: "12/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Connect to Database
+```{r}
+require(RODBC)
+
+#create connection to sql 64 bit
+UFC_Conn <-odbcConnect('VidCast64')
+```
+1.	How many fights are finished compared to the number decided by the judges score card?
+```{r}
+TOTselect <-  "SELECT
+    FightCard.FightCardName AS FightCardName, FightCard.CardDate AS CardDate, FightCard.Venue AS Venue
+	, WeightClass.WeightClassName AS WeightClassName
+	, TheMatch.TheMatchID AS TheMatchID, TheMatch.TotalRounds AS TotalRounds, TheMatch.MethMoveID AS MethMoveID
+    , WinningFighter.FighterName AS WinnerName
+	, Winner.FinishRound AS FinishRound, Winner.TotalTime AS TotalTime, Winner.WinOdds AS WinOdds, Winner.WinHeight AS WinHeight, Winner.WinWeight AS WinWeight, Winner.WinReach AS WinReach, Winner.WinAge AS WinAge,
+	Winner.WinKD AS WinKD, Winner.WinSigStrLand AS WinSigStrLand, Winner.WinSigStrAtt AS WinSigStrAtt, Winner.WinTotStrLand AS WinTotStrLand, Winner.WinTotStrAtt AS WinTotStrAtt, Winner.WinTdLand AS WinTdLand, Winner.WinTdAtt AS WinTdAtt, Winner.WinSubAtt AS WinSubAtt
+    , LosingFighter.FighterName AS LoserName
+    , Loser.LoseOdds AS LoseOdds, Loser.LoseHeight AS LoseHeight, Loser.LoseWeight AS LoseWeight, Loser.LoseReach AS LoseReach, Loser.LoseAge AS LoseAge,
+	Loser.LoseKD AS LoseKD, Loser.LoseSigStrLand AS LoseSigStrLand, Loser.LoseSigStrAtt AS LoseSigStrAtt, Loser.LoseTotStrLand AS LoseTotStrLand, Loser.LoseTotStrAtt AS LoseTotStrAtt, Loser.LoseTdLand AS LoseTdLand, Loser.LoseTdAtt AS LoseTdAtt, Loser.LoseSubAtt AS LoseSubAtt
+	, Method.MethodName
+FROM TheMatch TheMatch
+	INNER JOIN FightCard FightCard ON FightCard.FightCardID = TheMatch.FightCardID
+	INNER JOIN WeightClass WeightClass ON WeightClass.WeightClassID = TheMatch.WeightClassID
+    INNER JOIN Winner  Winner ON Winner.WinnerID = TheMatch.WinnerID
+    INNER JOIN Fighter WinningFighter ON Winner.FighterID = WinningFighter.FighterID
+    INNER JOIN Loser Loser ON Loser.LoserID = TheMatch.LoserID
+    INNER JOIN Fighter LosingFighter ON Loser.FighterID = LosingFighter.FighterID
+	INNER JOIN MethMove MethMove ON MethMove.MethMoveID = TheMatch.MethMoveID
+	INNER JOIN Method Method ON Method.MethodID = MethMove.MethodID"
+
+#send results to server and store results in var
+TOTresult <- sqlQuery(UFC_Conn, TOTselect)
+```
+Count results of diff matches
+```{r}
+meth <- c('DQ','KO/TKO', 'S-Dec', 'SUB', 'U-DEC')
+fightmeth <- table(TOTresult$MethodName)
+#db for ggplot
+dffightmeth <- data.frame(fightmeth)
+#colnames
+names(dffightmeth) <- c("WeightClassName", "Freq")
+```
+plot barchart
+```{r}
+methbar <- ggplot(dffightmeth, aes(x=WeightClassName, y= Freq))+
+  geom_bar(color = "grey", stat="identity")+ ## set color of bars and use the value of the number in the cells.
+  geom_text(aes(label= Freq), vjust = -1, color = "red")+
+  ggtitle("Number of Fights Won by Method") + expand_limits(y = 60)
+methbar
+```
+```{r}
+fightmeth
+```
+
+2. Most used finishing move and time to finish
+```{r}
+FinishFightSelect <- "SELECT TheMatch.TheMatchID, WeightClass.WeightClassName, Method.MethodName, FinMove.FinMoveName, Loser.FinishRound, Loser.TotalTime
+FROM ((Method INNER JOIN (FinMove INNER JOIN MethMove ON FinMove.[FinMoveID] = MethMove.[FinMoveID]) ON Method.[MethodID] = MethMove.[MethodID]) INNER JOIN Loser ON MethMove.[MethMoveID] = Loser.[MethMoveID]) INNER JOIN (WeightClass INNER JOIN TheMatch ON WeightClass.[WeightClassID] = TheMatch.[WeightClassID]) ON Loser.[LoserID] = TheMatch.[LoserID];
+"
+FinFightresult <- sqlQuery(UFC_Conn, FinishFightSelect)
+```
+Count result of each FinMove
+```{r}
+fmove <- c('Anaconda Choke', 'Ankle Lock', 'Arm Triangle', 'Armbar', 'Darre Choke', 'Elbow', 
+'Flying Knee', 'Guillotine Choke', 'Heel Hook', 'Injury', 'Keylock', 'Kick', 
+'Kimura', 'Knee', 'Knee Bar', 'Neck Crank', 'North-South Choke', 'Omoplata', 
+'Other - Choke', 'Other - Lock', 'Peruvian Necktie', 'Punch', 'Punches', 
+'Rear Naked Choke', 'Slam', 'Spinning Back Fist','Spinning Back Kick', 'Triangle Choke')
+fightresult <- table(FinFightresult$FinMoveName)
+fightresult
+
+```
+graph results of method and time to execution
+```{r}
+library(ggplot2)
+head(frdf)
+#make into df so we can plot using ggplot
+frdf <- data.frame(FinFightresult)
+scatfrdf	<- ggplot(frdf,aes(x=FinMoveName,y=TotalTime),na.rm=TRUE) + geom_point(aes(color=WeightClassName),na.rm=TRUE)+ ggtitle("Finish Move by Time") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+```{r}
+#call plot scat of finmoves
+scatfrdf
+```
+diff in strike thrown by weight class
+```{r}
+PunchClass <- "SELECT PunchesByClass.WeightClassName, 
+SUM (PunchesByClass.WinTotStrLand) as TotalWinnerStrikesLanded,
+SUM (PunchesByClass.WinTotStrAtt) as TotalWinnerStrikesThrown,
+SUM (PunchesByClass.LoseTotStrLand) as TotalLoserStrikesLanded,
+SUM (PunchesByClass.LoseTotStrAtt) as TotalLoserStrikesThrown
+FROM PunchesByClass
+GROUP BY WeightClassName"
+punchclassresult <- sqlQuery(UFC_Conn, PunchClass)
+#df of results
+dfpc <- data.frame(punchclassresult)
+```
+```{r}
+## Add column for total
+dfpc$TotalStrikesLanded <- dfpc$TotalWinnerStrikesLanded + dfpc$TotalLoserStrikesLanded
+dfpc$TotalStrikesThrown <- dfpc$TotalWinnerStrikesThrown + dfpc$TotalLoserStrikesThrown
+
+WC <- c(rep("Heavy" , 3) , rep("Light" , 3) )
+```
+```{r}
+#plot in  order of strike total
+library(viridisLite)
+strikechart <- ggplot(dfpc, aes(fill=TotalStrikesLanded, x=reorder(WeightClassName, -TotalStrikesThrown), y=TotalStrikesThrown)) + 
+ geom_bar(position="stack", stat="identity") + ggtitle("Strikes By Weight Class") + xlab("WeightClassName")
+#show chart
+strikechart
+```
+```{r}
+##df with only class and totals
+classtotal <- dfpc %>% select(WeightClassName, TotalStrikesLanded, TotalStrikesThrown)
+library(tidyr)
+library(ggplot2)
+
+ggplot(classtotal, aes(x = TotalStrikesLanded, y = TotalStrikesThrown, fill = WeightClassName)) + 
+    geom_bar(stat = 'identity', position = 'dodge')
+```
+
+
+Duration of match by class
+```{r}
+#creating data frame to show time by class
+dftot <- data.frame(TOTresult)
+dfweight <- dftot %>% select(WeightClassName, TotalTime, TheMatchID) %>% group_by(WeightClassName) %>% summarise(Total= sum(TotalTime), Avg=mean(TotalTime), .groups = 'drop')
+dfweight
+#Max Time 1500 sec
+```
+```{r}
+dfmatchtime <- dftot %>% select(WeightClassName, TotalTime, TheMatchID)
+#boxplot to show time across matches for weightclass
+boxtime <- ggplot(dfmatchtime, aes(x=TheMatchID, y=TotalTime, fill=WeightClassName)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 90), plot.title = element_text(hjust = 0.5)) + ggtitle("Duration of Match By Weight Class") + xlab("Match")
+```
+```{r}
+#calling boxplot
+boxtime
+```
+sub att 
+```{r}
+SubView <- "SELECT Method.MethodName, Winner.WinSubAtt
+FROM ((Method INNER JOIN MethMove ON Method.[MethodID] = MethMove.[MethodID]) INNER JOIN Winner ON MethMove.[MethMoveID] = Winner.[MethMoveID]) INNER JOIN TheMatch ON Winner.[WinnerID] = TheMatch.[WinnerID]
+WHERE MethodName = 'SUB'"
+SubView <- sqlQuery(UFC_Conn, SubView)
+#df of results
+dfsv <- data.frame(SubView)
+```
+```{r}
+library(dplyr)
+#group by #att and count freq
+piesv <- dfsv %>% select(MethodName, WinSubAtt) %>% group_by(WinSubAtt) %>% count(WinSubAtt)
+#name col
+colnames(piesv) <- c("Att", "Freq")
+#establish colors
+piesv$color <- c("red", "blue", "yellow", "green")
+## pie chart of sub atts per sub win
+pie(x= piesv$Freq, labels = piesv$Att, col = piesv$color, main = "Number of Attempts to Land Submission")
+```
+
