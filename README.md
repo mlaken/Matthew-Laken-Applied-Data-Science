@@ -3,8 +3,6 @@ Contact Information:
 
     Name: Matthew Laken
   
-    SUID: 226482612 
-  
     Email: mlaken@syr.edu
     
     LinkedIn: https://www.linkedin.com/in/matthew-laken-94643b151/
