@@ -3,7 +3,7 @@ Contact Information:
 
     Name: Matthew Laken
   
-    Email: mlaken@syr.edu
+    Email: lakenmatt1@gmail.com
     
     LinkedIn: https://www.linkedin.com/in/matthew-laken-94643b151/
  
